@@ -11,7 +11,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilo de Matplotlib
 plt.style.use('ggplot')
 
 # Título de la página
@@ -27,9 +26,6 @@ def cargar_datos():
 try:
     df = cargar_datos()
     datos_cargados = True
-
-    # Línea opcional para depuración
-    # st.sidebar.expander("Debug - Nombres de columnas").write(df.columns.tolist())
 
 except Exception as e:
     st.error(f"Error al cargar los datos: {e}")
