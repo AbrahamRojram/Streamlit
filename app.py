@@ -5,215 +5,186 @@ import matplotlib.pyplot as plt
 import altair as alt
 from matplotlib.ticker import MaxNLocator
 
-# Set page configuration
+# Configuración de la página
 st.set_page_config(
-    page_title="NBA Dashboard",
+    page_title="Dashboard NBA",
     layout="wide"
 )
 
-# Set Matplotlib style
+# Estilo de Matplotlib
 plt.style.use('ggplot')
 
-# Page title
-st.title("NBA Dashboard")
+# Título de la página
+st.title("Dashboard NBA")
 
-# Load data
+# Cargar datos
 @st.cache_data
-def load_data():
-    # Load the NBA dataset
+def cargar_datos():
     df = pd.read_csv('nba_all_elo.csv')
     return df
 
-# Load the data
+# Intentar cargar los datos
 try:
-    df = load_data()
-    data_loaded = True
-    
-    # Debug info - display column names
-    #st.sidebar.expander("Debug - Column Names").write(df.columns.tolist())
-    
+    df = cargar_datos()
+    datos_cargados = True
+
+    # Línea opcional para depuración
+    # st.sidebar.expander("Debug - Nombres de columnas").write(df.columns.tolist())
+
 except Exception as e:
-    st.error(f"Error loading dataset: {e}")
-    st.error("Make sure the file 'nba_all_elo.csv' is in the same directory as this app.")
-    data_loaded = False
+    st.error(f"Error al cargar los datos: {e}")
+    st.error("Asegúrate de que el archivo 'nba_all_elo.csv' esté en el mismo directorio que esta app.")
+    datos_cargados = False
 
-if data_loaded:
+if datos_cargados:
     # Sidebar
-    st.sidebar.header("Filters")
+    st.sidebar.header("Filtros")
 
-    # Year selector - Use 'year_id' column
-    years = sorted(df['year_id'].unique().tolist())
-    selected_year = st.sidebar.selectbox("Select Year", years)
+    # Filtro por año
+    años = sorted(df['year_id'].unique().tolist())
+    año_seleccionado = st.sidebar.selectbox("Selecciona el año", años)
 
-    # Team selector - using fran_id as the team identifier
-    # Get unique team names from both team and opponent columns
-    teams = sorted(set(df['fran_id'].unique()) | set(df['opp_fran'].unique()))
-    selected_team = st.sidebar.selectbox("Select Team", teams)
+    # Filtro por equipo
+    equipos = sorted(set(df['fran_id'].unique()) | set(df['opp_fran'].unique()))
+    equipo_seleccionado = st.sidebar.selectbox("Selecciona el equipo", equipos)
 
-    # Game type selector (Regular/Playoff/Both)
-    game_type_options = ["Regular Season", "Playoffs", "Both"]
-    selected_game_type = st.sidebar.radio("Select Game Type", game_type_options, key="game_type")
+    # Filtro por tipo de partido
+    opciones_tipo = ["Temporada regular", "Playoffs", "Ambos"]
+    tipo_partido = st.sidebar.radio("Selecciona el tipo de partido", opciones_tipo, key="tipo_partido")
 
-    # Filter data based on selections
-    # First, filter by year
-    year_filter = df['year_id'] == selected_year
-    
-    # Then filter for games involving the selected team (either as team or opponent)
-    team_filter = (df['fran_id'] == selected_team) | (df['opp_fran'] == selected_team)
-    
-    # Combine filters
-    filtered_df = df[year_filter & team_filter].copy()
-    
-    # Filter by game type if applicable
-    if selected_game_type != "Both":
-        if selected_game_type == "Playoffs":
-            filtered_df = filtered_df[filtered_df['is_playoffs'] == 1]
-        else:  # Regular Season
-            filtered_df = filtered_df[filtered_df['is_playoffs'] == 0]
-    
-    # Sort data by date for proper cumulative calculation
-    if 'date_game' in filtered_df.columns:
-        filtered_df['date_game'] = pd.to_datetime(filtered_df['date_game'])
-        filtered_df = filtered_df.sort_values('date_game')
-    
-    # Determine if selected team won or lost each game
-    filtered_df['is_team'] = filtered_df['fran_id'] == selected_team
-    filtered_df['team_result'] = filtered_df.apply(
-        lambda row: row['game_result'] if row['is_team'] else 
-                    ('W' if row['game_result'] == 'L' else 'L'), 
+    # Filtros
+    filtro_año = df['year_id'] == año_seleccionado
+    filtro_equipo = (df['fran_id'] == equipo_seleccionado) | (df['opp_fran'] == equipo_seleccionado)
+
+    df_filtrado = df[filtro_año & filtro_equipo].copy()
+
+    if tipo_partido != "Ambos":
+        if tipo_partido == "Playoffs":
+            df_filtrado = df_filtrado[df_filtrado['is_playoffs'] == 1]
+        else:
+            df_filtrado = df_filtrado[df_filtrado['is_playoffs'] == 0]
+
+    if 'date_game' in df_filtrado.columns:
+        df_filtrado['date_game'] = pd.to_datetime(df_filtrado['date_game'])
+        df_filtrado = df_filtrado.sort_values('date_game')
+
+    df_filtrado['es_equipo'] = df_filtrado['fran_id'] == equipo_seleccionado
+    df_filtrado['resultado_equipo'] = df_filtrado.apply(
+        lambda fila: fila['game_result'] if fila['es_equipo'] else
+        ('W' if fila['game_result'] == 'L' else 'L'),
         axis=1
     )
-    
-    # Add a game counter column
-    filtered_df = filtered_df.reset_index(drop=True)
-    filtered_df['game_number'] = range(1, len(filtered_df) + 1)
-    
-    # Create two columns for the layout
+
+    df_filtrado = df_filtrado.reset_index(drop=True)
+    df_filtrado['numero_partido'] = range(1, len(df_filtrado) + 1)
+
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        # Line chart for cumulative wins and losses using Matplotlib
-        st.subheader(f"Cumulative Wins and Losses for {selected_team} ({selected_year})")
-        
-        if not filtered_df.empty:
-            # Calculate cumulative wins and losses
-            wins_df = filtered_df[filtered_df['team_result'] == 'W'].copy()
-            losses_df = filtered_df[filtered_df['team_result'] == 'L'].copy()
-            
-            # Create a Matplotlib figure
+        st.subheader(f"Victorias y derrotas acumuladas de {equipo_seleccionado} ({año_seleccionado})")
+
+        if not df_filtrado.empty:
+            victorias = df_filtrado[df_filtrado['resultado_equipo'] == 'W'].copy()
+            derrotas = df_filtrado[df_filtrado['resultado_equipo'] == 'L'].copy()
+
             fig, ax = plt.subplots(figsize=(10, 6))
-            
-            # Plot cumulative wins
-            if not wins_df.empty:
-                wins_df = wins_df.sort_values('game_number')
-                wins_df['cumulative_wins'] = range(1, len(wins_df) + 1)
-                ax.plot(wins_df['game_number'], wins_df['cumulative_wins'], 
-                        marker='o', linestyle='-', color='green', label='Wins')
-            
-            # Plot cumulative losses
-            if not losses_df.empty:
-                losses_df = losses_df.sort_values('game_number')
-                losses_df['cumulative_losses'] = range(1, len(losses_df) + 1)
-                ax.plot(losses_df['game_number'], losses_df['cumulative_losses'],
-                        marker='o', linestyle='-', color='red', label='Losses')
-            
-            # Enhance the plot
-            ax.set_xlabel('Game Number')
-            ax.set_ylabel('Cumulative Count')
-            ax.set_title(f'{selected_team} Win/Loss Progression ({selected_year})')
+
+            if not victorias.empty:
+                victorias = victorias.sort_values('numero_partido')
+                victorias['victorias_acumuladas'] = range(1, len(victorias) + 1)
+                ax.plot(victorias['numero_partido'], victorias['victorias_acumuladas'],
+                        marker='o', linestyle='-', color='green', label='Victorias')
+
+            if not derrotas.empty:
+                derrotas = derrotas.sort_values('numero_partido')
+                derrotas['derrotas_acumuladas'] = range(1, len(derrotas) + 1)
+                ax.plot(derrotas['numero_partido'], derrotas['derrotas_acumuladas'],
+                        marker='o', linestyle='-', color='red', label='Derrotas')
+
+            ax.set_xlabel('Número de partido')
+            ax.set_ylabel('Cantidad acumulada')
+            ax.set_title(f'Progresión de victorias y derrotas de {equipo_seleccionado} ({año_seleccionado})')
             ax.legend()
             ax.grid(True, linestyle='--', alpha=0.7)
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-            
-            # Display plot in Streamlit
+
             st.pyplot(fig)
-            
-            # Also provide the Altair chart for interactive features
-            # Create dataframes for plotting with Altair
-            if not wins_df.empty:
-                wins_data = pd.DataFrame({
-                    'Game Number': wins_df['game_number'],
-                    'Count': wins_df['cumulative_wins'],
-                    'Type': ['Wins'] * len(wins_df)
+
+            # Gráfico interactivo con Altair
+            if not victorias.empty:
+                datos_victorias = pd.DataFrame({
+                    'Partido': victorias['numero_partido'],
+                    'Cantidad': victorias['victorias_acumuladas'],
+                    'Tipo': ['Victorias'] * len(victorias)
                 })
             else:
-                wins_data = pd.DataFrame(columns=['Game Number', 'Count', 'Type'])
-            
-            if not losses_df.empty:
-                losses_data = pd.DataFrame({
-                    'Game Number': losses_df['game_number'],
-                    'Count': losses_df['cumulative_losses'],
-                    'Type': ['Losses'] * len(losses_df)
+                datos_victorias = pd.DataFrame(columns=['Partido', 'Cantidad', 'Tipo'])
+
+            if not derrotas.empty:
+                datos_derrotas = pd.DataFrame({
+                    'Partido': derrotas['numero_partido'],
+                    'Cantidad': derrotas['derrotas_acumuladas'],
+                    'Tipo': ['Derrotas'] * len(derrotas)
                 })
             else:
-                losses_data = pd.DataFrame(columns=['Game Number', 'Count', 'Type'])
-            
-            # Combine for Altair
-            plot_data = pd.concat([wins_data, losses_data])
-            
-            if not plot_data.empty:
-                # Create Altair chart
-                chart = alt.Chart(plot_data).mark_line(point=True).encode(
-                    x='Game Number:Q',
-                    y='Count:Q',
-                    color=alt.Color('Type:N', scale=alt.Scale(domain=['Wins', 'Losses'], range=['green', 'red'])),
-                    tooltip=['Game Number', 'Count', 'Type']
+                datos_derrotas = pd.DataFrame(columns=['Partido', 'Cantidad', 'Tipo'])
+
+            datos_grafico = pd.concat([datos_victorias, datos_derrotas])
+
+            if not datos_grafico.empty:
+                grafico = alt.Chart(datos_grafico).mark_line(point=True).encode(
+                    x='Partido:Q',
+                    y='Cantidad:Q',
+                    color=alt.Color('Tipo:N', scale=alt.Scale(domain=['Victorias', 'Derrotas'], range=['green', 'red'])),
+                    tooltip=['Partido', 'Cantidad', 'Tipo']
                 ).properties(
                     width=600,
                     height=300
                 ).interactive()
-                
-                st.altair_chart(chart, use_container_width=True)
+
+                st.altair_chart(grafico, use_container_width=True)
         else:
-            st.write("No game data available for the selected filters.")
+            st.write("No hay datos disponibles para los filtros seleccionados.")
 
     with col2:
-        # Pie chart for win/loss percentage using Matplotlib
-        st.subheader(f"Win/Loss Distribution for {selected_team} ({selected_year})")
-        
-        if not filtered_df.empty:
-            # Count wins and losses
-            results_count = filtered_df['team_result'].value_counts()
-            
-            # Calculate percentages
-            win_count = results_count.get('W', 0)
-            loss_count = results_count.get('L', 0)
-            total_games = win_count + loss_count
-            
-            if total_games > 0:
-                # Create Matplotlib pie chart
-                fig, ax = plt.subplots(figsize=(5, 5))
-                
-                labels = ['Wins', 'Losses']
-                sizes = [win_count, loss_count]
-                colors = ['green', 'red']
-                explode = (0.1, 0)  # Explode the wins slice for emphasis
-                
-                ax.pie(sizes, explode=explode, labels=labels, colors=colors,
-                       autopct='%1.1f%%', shadow=True, startangle=90)
-                ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle
-                ax.set_title(f'{selected_team} Win/Loss Percentage ({selected_year})')
-                
-                # Display in Streamlit
-                st.pyplot(fig)
-                
-                # Show the actual numbers
-                st.metric("Total Games", total_games)
-                col_win, col_loss = st.columns(2)
-                with col_win:
-                    st.metric("Wins", win_count)
-                    st.metric("Win %", f"{(win_count/total_games*100):.1f}%")
-                with col_loss:
-                    st.metric("Losses", loss_count)
-                    st.metric("Loss %", f"{(loss_count/total_games*100):.1f}%")
-            else:
-                st.write("No games with clear results found for the selected filters.")
-        else:
-            st.write("No data available for the selected filters.")
+        st.subheader(f"Distribución de victorias y derrotas de {equipo_seleccionado} ({año_seleccionado})")
 
-    # Footer with information
+        if not df_filtrado.empty:
+            conteo = df_filtrado['resultado_equipo'].value_counts()
+            victorias = conteo.get('W', 0)
+            derrotas = conteo.get('L', 0)
+            total = victorias + derrotas
+
+            if total > 0:
+                fig, ax = plt.subplots(figsize=(5, 5))
+                etiquetas = ['Victorias', 'Derrotas']
+                tamaños = [victorias, derrotas]
+                colores = ['green', 'red']
+                explotar = (0.1, 0)
+
+                ax.pie(tamaños, explode=explotar, labels=etiquetas, colors=colores,
+                       autopct='%1.1f%%', shadow=True, startangle=90)
+                ax.axis('equal')
+                ax.set_title(f'Porcentaje de victorias y derrotas de {equipo_seleccionado} ({año_seleccionado})')
+
+                st.pyplot(fig)
+
+                st.metric("Total de partidos", total)
+                col_vic, col_der = st.columns(2)
+                with col_vic:
+                    st.metric("Victorias", victorias)
+                    st.metric("Porcentaje de victorias", f"{(victorias / total * 100):.1f}%")
+                with col_der:
+                    st.metric("Derrotas", derrotas)
+                    st.metric("Porcentaje de derrotas", f"{(derrotas / total * 100):.1f}%")
+            else:
+                st.write("No se encontraron resultados claros para los filtros seleccionados.")
+        else:
+            st.write("No hay datos disponibles para los filtros seleccionados.")
+
+    # Pie de página
     st.markdown("---")
-    st.info("NBA Dashboard displaying data from nba_all_elo.csv")
+    st.info("Dashboard de la NBA con datos del archivo nba_all_elo.csv")
 else:
-    st.error("Unable to load data. Please check that the file exists and is properly formatted.")
+    st.error("No se pudieron cargar los datos. Verifica que el archivo exista y esté bien formateado.")
