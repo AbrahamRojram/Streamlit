@@ -30,7 +30,7 @@ try:
     data_loaded = True
     
     # Debug info - display column names
-    st.sidebar.expander("Debug - Column Names").write(df.columns.tolist())
+    #st.sidebar.expander("Debug - Column Names").write(df.columns.tolist())
     
 except Exception as e:
     st.error(f"Error loading dataset: {e}")
